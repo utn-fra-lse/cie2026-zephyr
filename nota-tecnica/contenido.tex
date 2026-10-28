@@ -1,0 +1,186 @@
+% =====================================================================
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{UTNBlue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    showstringspaces=false,
+    upquote=true,
+    frame=single, rulecolor=\color{UTNGray},
+    columns=fullflexible, keepspaces=true,
+    literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1,
+}
+\lstdefinelanguage{dts}{
+    morekeywords={compatible,reg,status,gpios,aliases},
+    morecomment=[s]{/*}{*/}, morestring=[b]",
+}
+\renewcommand{\lstlistingname}{Listado}
+\newcommand{\ok}{\ding{51}}
+\newcommand{\nok}{--}
+
+% =====================================================================
+\section{Introducción}
+
+Un proyecto de firmware para microcontroladores se construye habitualmente sobre el kit de desarrollo de software (SDK) que provee el fabricante del circuito integrado: su capa de abstracción de hardware (HAL), su sistema de compilación y, con frecuencia, su entorno de desarrollo. Esta elección, razonable al comienzo de un proyecto, mezcla en los mismos archivos la lógica de la aplicación con detalles de la plataforma, como números de pin, nombres de periféricos y secuencias de inicialización de relojes. Cuando el microcontrolador debe reemplazarse, por faltante de stock, por costo o porque cambian los requerimientos, el resultado práctico es reescribir buena parte del firmware.
+
+Los sistemas operativos de tiempo real (RTOS) tradicionales para microcontroladores, como FreeRTOS \cite{barry_freertos}, resuelven la planificación de tareas y la sincronización, pero dejan el acceso a periféricos en manos del SDK de cada fabricante. Las comparaciones entre RTOS suelen centrarse en el desempeño temporal del núcleo \cite{ungurean2020}, mientras que la portabilidad de la aplicación entre plataformas recibe menos atención.
+
+Zephyr es un RTOS de código abierto, distribuido bajo licencia Apache~2.0 y alojado por la Linux Foundation, que adopta otro enfoque: además del núcleo, incluye un modelo de drivers propio con interfaces estandarizadas, una descripción declarativa del hardware basada en devicetree y un sistema de compilación y configuración unificado \cite{zephyr_docs}. En la versión~4.4.2, utilizada en este trabajo, el árbol de código fuente contiene definiciones para 1014 placas de 160 fabricantes y once arquitecturas de procesador.
+
+El objetivo de esta nota técnica es describir esos mecanismos y evaluar, con aplicaciones concretas, en qué medida permiten que una misma aplicación se compile y ejecute en plataformas de distintos fabricantes sin modificar su código fuente. El trabajo se enmarca en las actividades del Laboratorio de Sistemas Embebidos de la UTN FRA y acompaña la charla homónima presentada en el Congreso de Ingeniería Electrónica 2026.
+
+% =====================================================================
+\section{Desarrollo}
+
+\subsection{Arquitectura de Zephyr}
+
+Zephyr organiza el software en capas. La aplicación utiliza los servicios del núcleo (hilos, planificador, semáforos, colas, temporizadores) y las \emph{interfaces de programación (API) de dispositivos}, que son genéricas para cada clase de periférico: GPIO, I\textsuperscript{2}C, SPI, UART, ADC, PWM y sensores, entre otras. Debajo de cada API hay uno o varios drivers, cada uno específico de un periférico o familia de circuitos integrados; algunos se apoyan internamente en la HAL del fabricante, que queda oculta para la aplicación.
+
+Dos sistemas de configuración, ambos resueltos durante la compilación, determinan qué se incluye en la imagen final:
+\begin{itemize}
+    \item el \textbf{devicetree}, que describe \emph{qué hardware existe y cómo está conectado};
+    \item \textbf{Kconfig}, que define \emph{qué componentes de software se compilan} y con qué parámetros \cite{zephyr_kconfig}.
+\end{itemize}
+
+\subsection{Devicetree}
+
+El devicetree es una estructura de datos jerárquica para describir hardware, especificada por la comunidad devicetree.org \cite{dtspec} y adoptada por el núcleo Linux para eliminar del código fuente las descripciones específicas de cada placa \cite{linux_dt_usage}. Cada \emph{nodo} representa un componente (un controlador I\textsuperscript{2}C, un sensor, un LED) y contiene \emph{propiedades}. La propiedad \texttt{compatible} identifica qué es el dispositivo y, por lo tanto, qué driver lo atiende; \texttt{reg} indica su dirección y \texttt{status} si está habilitado.
+
+La descripción se arma por capas. El fabricante del SoC provee un archivo \texttt{.dtsi} con todos sus periféricos; quien diseña la placa escribe un \texttt{.dts} que lo incluye y declara lo que la placa agrega (LED, pulsadores, cristal, pines utilizados); y la aplicación puede aportar archivos de superposición (\emph{overlays}) que agregan o modifican nodos sin tocar los anteriores. El Listado~\ref{lst:overlay} muestra un overlay que conecta un acelerómetro MPU6050 a un bus I\textsuperscript{2}C y le asigna el alias genérico \texttt{sensor0}.
+
+\begin{lstlisting}[language=dts, caption={Overlay que agrega un MPU6050 al bus I\textsuperscript{2}C definido por la placa.}, label=lst:overlay, captionpos=t]
+&sensor_i2c {
+    mpu6050: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg = <0x68>;
+    };
+};
+/ { aliases { sensor0 = &mpu6050; }; };
+\end{lstlisting}
+
+A diferencia de Linux, donde el árbol se interpreta durante el arranque, Zephyr lo procesa durante la compilación \cite{zephyr_dt_guide}. Un conjunto de scripts en Python combina las capas, valida cada nodo contra su \emph{binding} (un archivo YAML que define las propiedades admitidas para cada \texttt{compatible}) y genera el encabezado \texttt{devicetree\_generated.h}, con macros de C para cada nodo y propiedad. La aplicación accede a esa información mediante macros como \texttt{DT\_ALIAS()}, \texttt{DT\_NODELABEL()} o \texttt{GPIO\_DT\_SPEC\_GET()}, que se resuelven en constantes. En consecuencia, la descripción del hardware no ocupa memoria de datos ni tiempo de ejecución, y los errores, como un pin inexistente o una propiedad obligatoria ausente, se detectan al compilar.
+
+Los \emph{alias} (\texttt{led0}, \texttt{sw0}, \texttt{sensor0}) constituyen la interfaz entre la aplicación y la placa: la aplicación los referencia por nombre y cada placa, o su overlay, decide a qué nodo físico apuntan.
+
+\subsection{Modelo de dispositivos y API estandarizadas}
+
+Cada nodo del devicetree habilitado y con driver disponible da lugar a una instancia de \texttt{struct device}, creada en tiempo de compilación \cite{zephyr_device_model}. La estructura contiene un puntero a la configuración constante (derivada del devicetree y ubicada en memoria no volátil), uno a los datos de estado (en RAM) y uno a una tabla de funciones, la \emph{API} del driver. Los dispositivos se inicializan automáticamente antes de \texttt{main()}, por niveles y prioridades que respetan las dependencias (por ejemplo, el bus I\textsuperscript{2}C antes que el sensor conectado a él).
+
+Las funciones públicas de cada clase de dispositivo, como \texttt{gpio\_pin\_toggle\_dt()} o \texttt{sensor\_sample\_fetch()}, son funciones \emph{inline} que invocan la entrada correspondiente de esa tabla. La implementación que se ejecuta queda determinada por el devicetree, sin compilación condicional en el código de la aplicación. En el caso de los sensores \cite{zephyr_sensor_api}, la API define \emph{canales} con unidades del Sistema Internacional (aceleración en \unit{\metre\per\second\squared}, velocidad angular en \unit{\radian\per\second}, temperatura en \unit{\degreeCelsius}) y valores de punto fijo (\texttt{struct sensor\_value}); un driver que no implementa un canal devuelve \texttt{-ENOTSUP}.
+
+Kconfig complementa el modelo: la aplicación declara en \texttt{prj.conf} las API que usa (\texttt{CONFIG\_GPIO}, \texttt{CONFIG\_I2C}, \texttt{CONFIG\_SENSOR}) y los drivers concretos se habilitan solos cuando el devicetree contiene un nodo habilitado con el \texttt{compatible} correspondiente. Un archivo opcional \texttt{boards/<placa>.conf} se combina con \texttt{prj.conf} solo al compilar para esa placa, lo que permite ajustar el software a una plataforma sin tocar la configuración común.
+
+\subsection{Diseño experimental}
+
+Se construyó un espacio de trabajo con topología de \emph{manifest} propio de la herramienta \texttt{west} \cite{zephyr_west}, que fija Zephyr en la versión~4.4.2 y descarga solo los módulos de HAL necesarios. Sobre él se desarrollaron dos aplicaciones:
+
+\begin{itemize}
+    \item \textbf{blinky\_boton}: un LED parpadea y cada flanco del pulsador, atendido por interrupción, cambia el período. Utiliza solo los alias \texttt{led0} y \texttt{sw0} y la API de GPIO.
+    \item \textbf{acelerometro}: obtiene el dispositivo apuntado por el alias \texttt{sensor0} y, cada dos segundos, solicita aceleración, velocidad angular, campo magnético y temperatura del chip, mostrando las magnitudes que el driver responda. No contiene ninguna referencia a un sensor o placa en particular. Incluye además la consola interactiva (\emph{shell}) de Zephyr, con comandos para inspeccionar dispositivos, buses I\textsuperscript{2}C y sensores.
+\end{itemize}
+
+Para la aplicación del acelerómetro los overlays se separaron en dos ejes independientes. El overlay de cada placa, que el sistema de compilación aplica automáticamente, define qué bus I\textsuperscript{2}C se usa, asignándole la etiqueta común \texttt{sensor\_i2c}, y, si la placa integra un acelerómetro, lo designa como \texttt{sensor0}. Dos de las placas evaluadas lo integran: el FXOS8700 de la FRDM-K64F (acelerómetro y magnetómetro) y el MMA8652FC de la LPCXpresso55S69, ambos atendidos por el mismo driver. El overlay del MPU6050 (Listado~\ref{lst:overlay}) se solicita en la invocación de compilación (\texttt{-DEXTRA\_DTC\_OVERLAY\_FILE=mpu6050.overlay}); como se aplica después del de la placa, reemplaza al sensor integrado cuando lo hay. De este modo, $N$ placas y $M$ sensores requieren $N+M$ archivos en lugar de $N \times M$.
+
+La Tabla~\ref{tab:placas} resume las plataformas evaluadas. Cada combinación se compiló desde la consola con \texttt{west build}, a partir de un directorio limpio, y se registraron el resultado y la memoria estática informada por el enlazador. Se utilizó el Zephyr SDK~1.0.1 \cite{zephyr_sdk} en una computadora portátil con procesador Apple M3 Pro y macOS.
+
+\begin{table}[!ht]
+    \centering
+    \small
+    \caption{Plataformas evaluadas}
+    \label{tab:placas}
+    \begin{tblr}{colspec={|l|l|l|l|l|}}
+        \hline
+        Placa & Fabricante del SoC & SoC & Núcleo & Acelerómetro integrado\\\hline
+        Raspberry Pi Pico & Raspberry Pi & RP2040 & Cortex-M0+ & --\\
+        Raspberry Pi Pico 2 & Raspberry Pi & RP2350A & Cortex-M33 & --\\
+        WeAct Black Pill F401 & STMicroelectronics & STM32F401CC & Cortex-M4F & --\\
+        DOIT ESP32 DevKit V1 & Espressif & ESP32 & Xtensa LX6 & --\\
+        ESP32-C3 SuperMini & Espressif & ESP32-C3 & RISC-V (RV32IMC) & --\\
+        ESP32-S3 DevKitC & Espressif & ESP32-S3 & Xtensa LX7 & --\\
+        nRF5340 DK & Nordic Semiconductor & nRF5340 & Cortex-M33 & --\\
+        LPCXpresso55S69 & NXP & LPC55S69 & Cortex-M33 & MMA8652FC\\
+        FRDM-MCXN236 & NXP & MCXN236 & Cortex-M33 & --\\
+        FRDM-K64F & NXP & MK64FN1M0 & Cortex-M4F & FXOS8700\\
+        \hline
+    \end{tblr}
+\end{table}
+
+% =====================================================================
+\section{Resultados}
+
+Se realizaron 22 compilaciones, todas exitosas: \texttt{blinky\_boton} para las diez placas, \texttt{acelerometro} con el MPU6050 para las diez y \texttt{acelerometro} con el sensor integrado para las dos placas que lo tienen. En ninguna se modificó el archivo \texttt{main.c} ni el \texttt{prj.conf}. La Tabla~\ref{tab:resultados} presenta, para la aplicación del acelerómetro con MPU6050, el uso de memoria y la cantidad de líneas efectivas de overlay propias de cada placa, frente a las 61 líneas efectivas de la aplicación.
+
+\begin{table}[!ht]
+    \centering
+    \small
+    \caption{Aplicación \emph{acelerometro} con MPU6050: memoria y líneas de overlay por placa}
+    \label{tab:resultados}
+    \begin{tblr}{colspec={|l|l|r|r|r|r|}, row{1}={halign=c}}
+        \hline
+        Placa & Núcleo & {Flash\\(KiB)} & {RAM\\(KiB)} & {Overlay\\placa} & {Overlay\\total}\\\hline
+        Raspberry Pi Pico & Cortex-M0+ & 90,7 & 17,0 & 3 & 14\\
+        Raspberry Pi Pico 2 & Cortex-M33 & 86,1 & 17,2 & 3 & 14\\
+        WeAct Black Pill F401 & Cortex-M4F & 91,3 & 18,0 & 3 & 14\\
+        DOIT ESP32 DevKit V1 & Xtensa LX6 & 185,1 & 62,9 & 3 & 14\\
+        ESP32-C3 SuperMini & RISC-V & 148,0 & 112,3 & 3 & 14\\
+        ESP32-S3 DevKitC & Xtensa LX7 & 148,5 & 110,8 & 3 & 14\\
+        nRF5340 DK & Cortex-M33 & 92,4 & 17,6 & 3 & 14\\
+        LPCXpresso55S69 & Cortex-M33 & 90,9 & 17,4 & 8 & 19\\
+        FRDM-MCXN236 & Cortex-M33 & 93,1 & 17,7 & 3 & 14\\
+        FRDM-K64F & Cortex-M4F & 92,3 & 17,9 & 8 & 19\\
+        \hline
+    \end{tblr}
+    \par\vspace{3pt}\footnotesize\raggedright Líneas efectivas (sin comentarios ni líneas vacías). \texttt{main.c}: 61 líneas, idéntico en todas las placas. Overlay total = overlay de la placa + \texttt{mpu6050.overlay} (11 líneas). Flash y RAM: memoria estática informada por el enlazador; en ESP32 la RAM suma IRAM y DRAM. Incluye núcleo, drivers, consola y \emph{shell}.
+\end{table}
+
+\begin{table}[!ht]
+    \centering
+    \small
+    \caption{Magnitudes informadas por la misma aplicación según el sensor}
+    \label{tab:magnitudes}
+    \begin{tblr}{colspec={|l|l|c|c|c|c|}}
+        \hline
+        Sensor & Ubicación & Aceleración & Giro & Campo magn. & Temp.\ chip\\\hline
+        MPU6050 & externo, cualquier placa & \ok & \ok & \nok & \ok\\
+        FXOS8700 & integrado, FRDM-K64F & \ok & \nok & \ok & \nok\\
+        MMA8652FC & integrado, LPCXpresso55S69 & \ok & \nok & \nok & \nok\\
+        \hline
+    \end{tblr}
+\end{table}
+
+Para \texttt{blinky\_boton}, 7 de las 10 placas no requirieron overlay, porque su devicetree ya define \texttt{led0} y \texttt{sw0}. Las restantes solo necesitaron declarar un LED o un pulsador externo, en no más de 14 líneas.
+
+La Tabla~\ref{tab:magnitudes} muestra cómo la misma aplicación se adapta al sensor disponible. En la FRDM-K64F, pasar del FXOS8700 integrado al MPU6050 externo solo requirió agregar \texttt{mpu6050.overlay} a la invocación de compilación: la aplicación dejó de informar campo magnético y pasó a informar velocidad angular y temperatura del chip. Los dos acelerómetros integrados, de distinto modelo, son atendidos por el mismo driver; el modo de operación (solo acelerómetro, o acelerómetro y magnetómetro) lo fija la configuración que Zephyr define para cada placa.
+
+En las placas Cortex-M, la aplicación ocupó entre 86,1 y 93,1~KiB de memoria de programa y entre 17 y 18~KiB de RAM, valores dominados por el núcleo, los drivers, el registro de eventos y la \emph{shell}, no por la aplicación. Las imágenes para los SoC de Espressif, tanto Xtensa como RISC-V, resultaron mayores por el código de arranque y de soporte propio de esos chips.
+
+% =====================================================================
+\section{Discusión}
+
+Los resultados muestran que, para las clases de periféricos evaluadas, el devicetree y las API estandarizadas trasladan las diferencias entre plataformas desde el código de la aplicación a archivos declarativos breves, validados en compilación. El costo de portar una aplicación a una placa nueva pasa a ser el de describir sus conexiones, y la separación en overlays de placa y de sensor evita la explosión combinatoria de configuraciones. La consulta de canales con respuesta \texttt{-ENOTSUP} permite, además, que una sola aplicación se adapte a sensores con capacidades distintas sin conocerlos.
+
+El enfoque tiene limitaciones que conviene explicitar. Primero, la portabilidad alcanza a lo que cubren las API comunes: periféricos exclusivos de un fabricante, como el PIO del RP2040 o la radio de los nRF, se exponen con interfaces propias o con un subconjunto de funcionalidad. Segundo, no todos los drivers implementan todas las capacidades opcionales de su API, como transferencias por DMA, operación asíncrona o modos de bajo consumo. Tercero, el uso de memoria es mayor que el de una solución sin sistema operativo o con un núcleo mínimo: con el registro de eventos (\emph{logging}) y la \emph{shell}, la aplicación necesita unos 90~KiB de flash y 18~KiB de RAM en las placas Cortex-M, lo que deja afuera a los microcontroladores más pequeños o exige recortar funcionalidad mediante Kconfig. Cuarto, compilar en una plataforma no equivale a validarla: la temporización, el consumo y el comportamiento eléctrico siguen dependiendo del silicio y requieren ensayos en el hardware. Por último, la curva de aprendizaje inicial es mayor, ya que se deben incorporar devicetree, Kconfig, CMake y \texttt{west}.
+
+En el ámbito educativo, el mismo mecanismo permite que los ejercicios de una asignatura no dependan de una placa en particular: cada estudiante puede trabajar con el hardware disponible y concentrarse en conceptos (interrupciones, buses, abstracción de dispositivos) en lugar de en las particularidades de un SDK. Como todo el flujo se resuelve con una única herramienta de consola, igual en Linux, macOS y Windows, el mismo laboratorio puede atender placas de distintos fabricantes sin instalar un entorno por cada uno.
+
+% =====================================================================
+\section{Conclusiones}
+
+Se analizaron los mecanismos con los que Zephyr desacopla la aplicación del hardware y se verificó experimentalmente que dos aplicaciones, de entradas y salidas digitales y de lectura de acelerómetros, se compilan sin cambios en su código para diez placas de cinco fabricantes y tres arquitecturas de procesador (ARM Cortex-M, Xtensa y RISC-V). Las diferencias quedaron confinadas a overlays de devicetree de pocas líneas, y el reemplazo de un acelerómetro integrado por uno externo se resolvió con el mismo mecanismo. Zephyr permite así tratar la placa, y el sensor, como parámetros de compilación, con beneficios concretos ante cambios de plataforma y en la enseñanza de sistemas embebidos.
+
+Como líneas futuras se propone extender la evaluación a otras clases de dispositivos (ADC, PWM, comunicaciones inalámbricas), medir en el hardware el desempeño temporal y el consumo de una misma aplicación en distintas plataformas e incorporar pruebas automáticas sobre hardware real con la herramienta \texttt{twister}.
+
+% =====================================================================
+\section{Declaraciones Editoriales}
+\subsection*{Agradecimientos}
+Al Departamento de Ingeniería Electrónica de la UTN FRA por el equipamiento del Laboratorio de Sistemas Embebidos.
+
+\subsection*{Disponibilidad de datos, materiales o software}
+El espacio de trabajo completo (manifest de \texttt{west}, aplicaciones, overlays y la guía para reproducir las compilaciones) está disponible en \url{https://github.com/utn-fra-lse/cie2026-zephyr} bajo licencia Apache~2.0.
+
+% =====================================================================
+\section{Referencias}
+\begingroup
+\renewcommand{\section}[2]{}% la plantilla ya numera la sección
+\bibliographystyle{unsrt}
+\bibliography{refs}
+\endgroup
