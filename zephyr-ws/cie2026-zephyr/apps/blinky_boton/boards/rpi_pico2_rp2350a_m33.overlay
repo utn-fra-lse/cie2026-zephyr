@@ -1,0 +1,20 @@
+/*
+ * Raspberry Pi Pico 2: trae led0 (GP25) pero no tiene botón de usuario.
+ * Agregamos uno externo: pulsador entre GP15 y GND (pull-up interno).
+ */
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	botones {
+		compatible = "gpio-keys";
+		boton_ext: boton_ext {
+			gpios = <&gpio0 15 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			label = "Pulsador externo GP15";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	aliases {
+		sw0 = &boton_ext;
+	};
+};

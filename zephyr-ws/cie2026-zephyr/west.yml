@@ -1,0 +1,32 @@
+# Manifest del workspace "Zephyr: un RTOS agnóstico al hardware"
+# Laboratorio de Sistemas Embebidos - UTN FRA - CIE 2026
+#
+# Repositorio: https://github.com/utn-fra-lse/cie2026-zephyr
+#
+# Topología T2: este repositorio es el manifest; Zephyr y los HALs se
+# descargan al lado con `west update`. Solo se traen los módulos
+# necesarios para las placas de la demo (descarga más liviana
+# y rápida).
+
+manifest:
+  self:
+    path: cie2026-zephyr
+
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.4.2
+      import:
+        name-allowlist:
+          - cmsis_6        # Cortex-M (CMSIS 6)
+          - cmsis          # compatibilidad
+          - picolibc       # libc por defecto
+          - hal_rpi_pico   # Raspberry Pi RP2040 / RP2350
+          - hal_stm32      # STMicroelectronics (Black Pill F401)
+          - hal_espressif  # ESP32, ESP32-C3, ESP32-S3
+          - hal_nordic     # nRF5340
+          - hal_nxp        # LPC55S69, MCXN236, K64F
