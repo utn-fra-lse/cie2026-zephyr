@@ -1,0 +1,767 @@
+\documentclass[aspectratio=169]{beamer}
+
+% ===================== TEMA =====================
+\usetheme{metropolis}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% es-noshorthands: sin esto babel convierte "o en "º" dentro del código
+\usepackage[spanish,es-tabla,es-noshorthands]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{qrcode}
+\usepackage{pifont}
+\usetikzlibrary{positioning,arrows.meta,calc,fit,shapes.misc,decorations.pathreplacing}
+
+% Color de acento propio, en línea con el apunte
+\definecolor{accentblue}{RGB}{30,70,140}
+\setbeamercolor{progress bar}{fg=accentblue, bg=accentblue!20}
+\setbeamercolor{frametitle}{bg=accentblue}
+\setbeamercolor{alerted text}{fg=accentblue}
+\setbeamertemplate{frame numbering}[fraction]
+
+% ===================== CÓDIGO =====================
+\definecolor{codebg}{RGB}{245,246,248}
+\definecolor{codecomment}{RGB}{110,120,130}
+\definecolor{codestring}{RGB}{160,60,20}
+\lstset{
+    basicstyle=\ttfamily\scriptsize,
+    backgroundcolor=\color{codebg},
+    keywordstyle=\color{accentblue}\bfseries,
+    commentstyle=\color{codecomment}\itshape,
+    stringstyle=\color{codestring},
+    showstringspaces=false,
+    upquote=true,
+    frame=single, rulecolor=\color{accentblue!30},
+    framesep=3pt, xleftmargin=4pt, xrightmargin=4pt,
+    columns=fullflexible, keepspaces=true,
+    literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1,
+}
+\lstdefinelanguage{dts}{
+    morekeywords={compatible,reg,status,gpios,aliases,chosen,label,pinctrl-0,pinctrl-names,clock-frequency},
+    sensitive=true,
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+}
+\lstdefinelanguage{kconf}{morecomment=[l]{\#}, morekeywords={y,n}}
+
+\newcommand{\si}{\textcolor{green!50!black}{\ding{51}}}
+\newcommand{\no}{\textcolor{gray!60}{\ding{55}}}
+
+% Repositorio del workspace
+\newcommand{\repourl}{https://github.com/utn-fra-lse/cie2026-zephyr}
+
+\title{Zephyr RTOS: una aplicación, muchas placas}
+\subtitle{Devicetree, drivers estandarizados y portabilidad real}
+\author{Fabrizio Carlassara\\
+\footnotesize Responsable del Laboratorio de Sistemas Embebidos}
+\institute{UTN -- Facultad Regional Avellaneda}
+\date{Congreso de Ingeniería Electrónica 2026}
+
+\begin{document}
+
+% =====================================================
+\maketitle
+
+% =====================================================
+\begin{frame}{Hoja de ruta}
+\begin{enumerate}
+    \item El problema: código atado al fabricante
+    \item Zephyr en cinco minutos
+    \item \textbf{Devicetree}: describir el hardware en vez de programarlo
+    \item \textbf{Modelo de drivers}: una API, muchas implementaciones
+    \item \alert{Demo}: la misma aplicación en placas de cinco fabricantes
+    \item Herramientas, límites y cómo empezar
+\end{enumerate}
+\end{frame}
+
+% =====================================================
+\section{El problema}
+
+% =====================================================
+\begin{frame}[fragile]{Prender un LED, cuatro fabricantes}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{\footnotesize STM32 (STM32Cube HAL)}
+\begin{lstlisting}[language=C]
+HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13,
+                  GPIO_PIN_SET);
+\end{lstlisting}
+\textbf{\footnotesize NXP (MCUXpresso SDK)}
+\begin{lstlisting}[language=C]
+GPIO_PinWrite(GPIO, 1, 4, 1U);
+\end{lstlisting}
+\column{0.5\textwidth}
+\textbf{\footnotesize Espressif (ESP-IDF)}
+\begin{lstlisting}[language=C]
+gpio_set_level(GPIO_NUM_2, 1);
+\end{lstlisting}
+\textbf{\footnotesize Raspberry Pi (Pico SDK)}
+\begin{lstlisting}[language=C]
+gpio_put(25, true);
+\end{lstlisting}
+\end{columns}
+\vspace{0.4em}
+\centering
+Cuatro APIs, cuatro sistemas de build, cuatro formas de configurar relojes y pines.\\
+\alert{El pin y el periférico quedan \emph{escritos en el código}.}
+\end{frame}
+
+% =====================================================
+\begin{frame}{El costo de casarse con un fabricante}
+\begin{itemize}
+    \item \textbf{Faltantes de componentes} (2021--2023): rediseñar la placa \emph{y} reescribir el firmware
+    \item \textbf{Cambio de requerimientos}: más RAM, BLE, menor consumo\ldots{} $\Rightarrow$ otro micro
+    \item \textbf{Equipos y formación}: cada familia es un mundo nuevo
+    \item \textbf{Prototipo vs.\ producto}: se prueba en una placa de desarrollo y se fabrica con otra
+\end{itemize}
+\vspace{0.5em}
+\begin{center}
+\begin{tikzpicture}[box/.style={draw, rounded corners, minimum height=0.8cm, align=center, font=\small}]
+\node[box, fill=green!15, minimum width=3.2cm] (app) {Lógica de la\\aplicación};
+\node[box, fill=orange!20, right=0.2cm of app, minimum width=3.2cm] (hal) {HAL del\\fabricante};
+\node[box, fill=gray!20, right=0.2cm of hal, minimum width=3.2cm] (hw) {Hardware};
+\draw[decorate, decoration={brace, amplitude=6pt, mirror}, thick, red!70!black]
+    ($(app.south west)+(0,-0.1)$) -- ($(hal.south east)+(0,-0.1)$)
+    node[midway, below=8pt, font=\footnotesize, text=red!70!black] {mezclados en los mismos archivos};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% =====================================================
+\begin{frame}[standout]
+¿Y si la aplicación\\
+\textbf{\emph{no supiera}} en qué placa corre?
+\end{frame}
+
+% =====================================================
+\section{Zephyr en cinco minutos}
+
+% =====================================================
+\begin{frame}{¿Qué es Zephyr?}
+\begin{columns}[T]
+\column{0.58\textwidth}
+\begin{itemize}
+    \item RTOS de código abierto, proyecto de la \textbf{Linux Foundation} (2016)
+    \item Licencia \textbf{Apache 2.0}: sin regalías, apto para productos comerciales
+    \item Gobernanza abierta: Intel, Nordic, NXP, ST, Espressif, Google, Meta\ldots
+    \item No es solo un kernel: \textbf{drivers, pilas de comunicación, sistema de build y herramientas}
+    \item Versiones cada 6 meses, LTS con soporte extendido
+\end{itemize}
+\column{0.38\textwidth}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{rl}
+\toprule
+\multicolumn{2}{c}{\textbf{Zephyr v4.4.2}} \\
+\midrule
+\alert{\Large +1000} & placas \\
+\alert{\Large 160} & fabricantes de placas \\
+\alert{\Large 11} & arquitecturas \\
+\alert{\Large +200} & drivers de sensores \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.3em}
+{\tiny Contado sobre el árbol de v4.4.2}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Arquitectura: dónde vive cada cosa}
+\centering
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[
+    layer/.style={draw, text width=10cm, minimum height=0.9cm, align=center, font=\small},
+    side/.style={draw, rounded corners, text width=3.2cm, align=center, font=\small, fill=yellow!20},
+]
+\node[layer, fill=gray!25] (hw) {Hardware\\\footnotesize RP2040 · STM32 · ESP32-C3 · ESP32-S3 · nRF5340 · K64F · \ldots};
+\node[layer, fill=orange!20, above=0cm of hw] (hal) {HALs de los fabricantes \footnotesize(módulos, ocultos)};
+\node[layer, fill=blue!20, above=0cm of hal] (drv) {Drivers \footnotesize(una implementación por periférico)};
+\node[layer, fill=blue!10, above=0cm of drv] (api) {\textbf{APIs estándar}: GPIO, I\textsuperscript{2}C, SPI, UART, ADC, PWM, sensor\ldots};
+\node[layer, fill=blue!15, above=0cm of api] (krn) {Kernel: threads, scheduler, semáforos, colas, timers};
+\node[layer, fill=green!15, above=0cm of krn] (app) {\textbf{Aplicación} \footnotesize(portable)};
+
+\node[side, anchor=west, minimum height=2.4cm] (dt) at ($(drv.east)!0.5!(api.east)+(1.2,0)$) {\textbf{Devicetree}\\\footnotesize ¿qué hardware hay\\\footnotesize y cómo está conectado?};
+\node[side, anchor=west, minimum height=1.6cm] (kc) at ($(krn.east)!0.5!(app.east)+(1.2,0)$) {\textbf{Kconfig}\\\footnotesize ¿qué software\\\footnotesize se incluye?};
+\draw[-{Latex}, thick, accentblue] (dt.west) -- (drv.east |- dt.west);
+\draw[-{Latex}, thick, accentblue] (kc.west) -- (krn.east |- kc.west);
+\node[font=\footnotesize\itshape, below=0.15cm of dt] {se resuelven al compilar};
+\end{tikzpicture}%
+}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Zephyr vs.\ un RTOS ``solo kernel''}
+\small
+\centering
+\begin{tabular}{p{3.6cm}p{4.6cm}p{4.6cm}}
+\toprule
+& \textbf{Kernel solo} (p.\ ej.\ FreeRTOS) & \textbf{Zephyr} \\
+\midrule
+Scheduler, colas, semáforos & Sí & Sí \\
+Drivers de periféricos & Los del fabricante (HAL propio) & Propios, con \alert{API común} \\
+Descripción del hardware & En el código (\texttt{\#define}, init) & \alert{Devicetree} \\
+Configuración & \texttt{FreeRTOSConfig.h} & Kconfig (\texttt{prj.conf}) \\
+Build y flasheo & El del IDE del fabricante & \texttt{west} + CMake, igual para todos \\
+Red, BLE, USB, FS & Bibliotecas externas & Integradas \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.8em}
+\footnotesize No es mejor ni peor: \textbf{es otro alcance}. Zephyr ocupa más memoria y exige más formación.
+\end{frame}
+
+% =====================================================
+\section{Devicetree}
+
+% =====================================================
+\begin{frame}{Devicetree: describir, no programar}
+\begin{itemize}
+    \item Estructura de datos \textbf{jerárquica} que describe el hardware: buses, periféricos, pines, direcciones
+    \item Viene de Open Firmware y del kernel Linux (ARM, 2011)
+    \item En Linux se interpreta \emph{al arrancar}; en Zephyr se resuelve \alert{al compilar}
+    \begin{itemize}
+        \item No hay parser en el microcontrolador
+        \item Todo termina en \textbf{macros de C} $\Rightarrow$ costo cero en tiempo de ejecución
+        \item Los errores (pin inexistente, propiedad faltante) aparecen \textbf{al compilar}
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{Anatomía de un nodo}
+\begin{columns}[T]
+\column{0.52\textwidth}
+\begin{lstlisting}[language=dts]
+/ {
+    aliases {
+        sensor0 = &mpu6050;
+    };
+};
+
+&i2c1 {
+    status = "okay";
+    clock-frequency = <400000>;
+
+    mpu6050: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg = <0x68>;
+    };
+};
+\end{lstlisting}
+\column{0.45\textwidth}
+\footnotesize
+\begin{description}[\texttt{compatible}]
+    \item[\texttt{/}] nodo raíz
+    \item[\texttt{\&i2c1}] referencia a un nodo ya definido (por su \emph{label})
+    \item[\texttt{mpu6050:}] \emph{label}: nombre para referenciarlo
+    \item[\texttt{@68}] \emph{unit address}: dirección en el bus
+    \item[\texttt{compatible}] \alert{qué es} el dispositivo $\Rightarrow$ qué driver lo maneja
+    \item[\texttt{reg}] dirección I\textsuperscript{2}C
+    \item[\texttt{status}] habilitado o no
+    \item[\texttt{aliases}] nombres \alert{genéricos} que usa la aplicación
+\end{description}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Capas: del silicio a la aplicación}
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+    f/.style={draw, rounded corners, minimum width=3.3cm, minimum height=1.15cm, align=center, font=\small},
+    arr/.style={-{Latex[length=2mm]}, thick, accentblue}
+]
+\node[f, fill=gray!20] (soc) {\texttt{rp2040.dtsi}\\\footnotesize SoC: periféricos,\\\footnotesize direcciones};
+\node[f, fill=orange!20, right=0.8cm of soc] (brd) {\texttt{rpi\_pico.dts}\\\footnotesize placa: LED, cristal,\\\footnotesize pines usados};
+\node[f, fill=green!20, right=0.8cm of brd] (ovl) {\texttt{rpi\_pico.overlay}\\\footnotesize aplicación: lo que\\\footnotesize yo conecté};
+\node[f, fill=blue!15, right=0.8cm of ovl] (out) {\texttt{zephyr.dts}\\\footnotesize árbol final};
+\draw[arr] (soc) -- (brd);
+\draw[arr] (brd) -- (ovl);
+\draw[arr] (ovl) -- (out);
+\node[below=0.25cm of soc, font=\footnotesize\itshape] {lo escribe el fabricante};
+\node[below=0.25cm of brd, font=\footnotesize\itshape] {lo escribe quien hace la placa};
+\node[below=0.25cm of ovl, font=\footnotesize\itshape, text=accentblue] {\textbf{lo escribimos nosotros}};
+\node[below=0.25cm of out, font=\footnotesize\itshape] {lo genera el build};
+\end{tikzpicture}%
+}
+
+\vspace{1em}
+\small Cada capa \textbf{agrega o modifica} nodos de la anterior. La aplicación nunca toca las dos primeras.
+\end{frame}
+
+% =====================================================
+\begin{frame}{Bindings: el contrato entre el árbol y el driver}
+\begin{columns}[c]
+\column{0.5\textwidth}
+\begin{itemize}
+    \item Archivo YAML por cada \texttt{compatible}
+    \item Define qué propiedades existen, su tipo y si son obligatorias
+    \item El build \textbf{valida} el árbol contra el binding
+    \item Zephyr v4.4.2 trae \alert{más de 3700} bindings
+\end{itemize}
+\column{0.46\textwidth}
+\centering
+\begin{tikzpicture}[b/.style={draw, rounded corners, minimum width=3.6cm, minimum height=0.8cm, align=center, font=\footnotesize}, arr/.style={-{Latex}, thick, accentblue}]
+\node[b, fill=green!15] (n) {nodo\\\texttt{compatible = "invensense,mpu6050"}};
+\node[b, fill=yellow!20, below=0.5cm of n] (y) {\texttt{invensense,mpu6050.yaml}};
+\node[b, fill=blue!15, below=0.5cm of y] (d) {\texttt{drivers/sensor/tdk/mpu6050}};
+\draw[arr] (n) -- node[right, font=\tiny] {se valida con} (y);
+\draw[arr] (y) -- node[right, font=\tiny] {lo implementa} (d);
+\end{tikzpicture}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{Del árbol al código C}
+\centering
+\begin{tikzpicture}[
+    f/.style={draw, rounded corners, minimum height=0.9cm, align=center, font=\footnotesize},
+    arr/.style={-{Latex[length=2mm]}, thick, accentblue}
+]
+\node[f, fill=gray!15, minimum width=2.6cm] (in) {\texttt{.dtsi} + \texttt{.dts}\\+ overlays};
+\node[f, fill=yellow!20, right=0.6cm of in, minimum width=2.4cm] (py) {scripts Python\\\footnotesize(edtlib + bindings)};
+\node[f, fill=blue!15, right=0.6cm of py, minimum width=3.6cm] (h) {\texttt{devicetree\_generated.h}\\\footnotesize miles de \texttt{\#define}};
+\node[f, fill=green!15, right=0.6cm of h, minimum width=2.4cm] (cc) {compilador\\de C};
+\draw[arr] (in) -- (py); \draw[arr] (py) -- (h); \draw[arr] (h) -- (cc);
+\end{tikzpicture}
+
+\vspace{0.8em}
+\begin{lstlisting}[language=C]
+/* La aplicación pide "lo que sea que esté en led0"... */
+static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+
+/* ...y el preprocesador lo resuelve, por ejemplo en la Pico, a:
+ *   { .port = &gpio0_device, .pin = 25, .dt_flags = GPIO_ACTIVE_HIGH }
+ * Sin tablas en RAM, sin búsquedas en tiempo de ejecución. */
+\end{lstlisting}
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{Kconfig: la otra mitad de la configuración}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{\footnotesize prj.conf de la app del acelerómetro}
+\begin{lstlisting}[language=kconf]
+# APIs que usa la aplicación
+CONFIG_GPIO=y
+CONFIG_I2C=y
+CONFIG_SENSOR=y
+
+# Logging (con punto flotante)
+CONFIG_LOG=y
+CONFIG_CBPRINTF_FP_SUPPORT=y
+
+# Shell para explorar el hardware
+CONFIG_SHELL=y
+CONFIG_I2C_SHELL=y
+CONFIG_SENSOR_SHELL=y
+\end{lstlisting}
+\column{0.46\textwidth}
+\begin{itemize}
+    \item \textbf{Devicetree}: qué hardware hay
+    \item \textbf{Kconfig}: qué software se compila
+    \item Los drivers \alert{se activan solos}: si hay un nodo \texttt{"invensense,mpu6050"} con \texttt{status = "okay"}, se compila su driver
+    \item Un mismo \texttt{prj.conf} para todas las placas
+    \item \texttt{west build -t menuconfig} para explorar
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\section{Modelo de drivers}
+
+% =====================================================
+\begin{frame}[fragile]{\texttt{struct device}: todo dispositivo es igual}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\begin{lstlisting}[language=C]
+struct device {
+    const char *name;
+    const void *config; /* flash */
+    void *data;         /* RAM   */
+    const void *api;    /* vtable */
+    /* ... */
+};
+\end{lstlisting}
+\footnotesize
+\textbf{config}: datos del devicetree (constantes)\\
+\textbf{data}: estado del driver\\
+\textbf{api}: tabla de funciones del driver
+\column{0.46\textwidth}
+\begin{itemize}
+    \item \textbf{Una instancia por nodo} del devicetree con \texttt{status = "okay"}
+    \item Se crean \textbf{al compilar} (\texttt{DEVICE\_DT\_INST\_DEFINE})
+    \item Se inicializan solas antes de \texttt{main()}, por niveles: \texttt{PRE\_KERNEL}, \texttt{POST\_KERNEL}\ldots
+    \item La app obtiene el puntero con \texttt{DEVICE\_DT\_GET(nodo)}
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Una API, muchas implementaciones}
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+    b/.style={draw, rounded corners, minimum height=0.85cm, align=center, font=\small},
+    arr/.style={-{Latex[length=2mm]}, thick, accentblue}
+]
+\node[b, fill=green!15, minimum width=6cm] (app) {\texttt{gpio\_pin\_toggle\_dt(\&led);}};
+\node[b, fill=blue!10, below=0.6cm of app, minimum width=6cm] (api) {\texttt{gpio.h}: \texttt{api->port\_toggle\_bits(dev, BIT(pin))}};
+\foreach \i/\txt/\c in {0/gpio\_rpi\_pico.c/orange, 1/gpio\_stm32.c/orange, 2/gpio\_esp32.c/orange, 3/gpio\_nrfx.c/orange, 4/gpio\_mcux\_lpc.c/orange}{
+    \node[b, fill=\c!20, minimum width=2.6cm, font=\footnotesize\ttfamily] (d\i) at ($(api.south)+(-5.6+\i*2.8,-1.5)$) {\txt};
+    \draw[arr] (api.south) -- (d\i.north);
+}
+\node[b, fill=gray!15, minimum width=14cm, below=0.6cm of d2] (hal) {Registros y HAL de cada fabricante};
+\end{tikzpicture}%
+}
+
+\vspace{0.6em}
+\small La función que se ejecuta la decide \textbf{el devicetree}, a través del puntero \texttt{api} del dispositivo.
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{La API de sensores}
+\begin{columns}[T]
+\column{0.56\textwidth}
+\begin{lstlisting}[language=C]
+const struct device *s =
+        DEVICE_DT_GET(DT_ALIAS(sensor0));
+struct sensor_value v[3];
+
+sensor_sample_fetch(s);  /* medir */
+
+sensor_channel_get(s,
+        SENSOR_CHAN_ACCEL_XYZ, v);  /* m/s2 */
+sensor_channel_get(s,
+        SENSOR_CHAN_GYRO_XYZ, v);   /* rad/s */
+/* canal que no mide -> -ENOTSUP */
+\end{lstlisting}
+\column{0.40\textwidth}
+\begin{itemize}
+    \item Canales con \textbf{unidades del SI}: m/s\textsuperscript{2}, rad/s, gauss, °C
+    \item \texttt{sensor\_value}: entero + millonésimas, sin \texttt{float} obligatorio
+    \item Igual para MPU6050, FXOS8700, MMA8652FC y otros +200
+    \item API asíncrona \texttt{sensor\_read()} + decodificadores para alto rendimiento
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}{APIs estandarizadas: no solo GPIO}
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Periféricos} & \textbf{Comunicación} & \textbf{Servicios} \\
+\midrule
+GPIO, PWM, ADC, DAC & UART, I\textsuperscript{2}C, SPI, CAN & Logging, shell \\
+Contadores, watchdog, RTC & USB device/host & Sistema de archivos \\
+Sensores, LED, displays & Bluetooth LE & Settings (NVS) \\
+Entrada (teclas, touch) & Ethernet, Wi-Fi, TCP/IP & Gestión de energía \\
+Flash, EEPROM & Thread, Matter, LoRa & Actualización (MCUboot) \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.8em}
+Mismo patrón en todas: \texttt{DEVICE\_DT\_GET} + \texttt{device\_is\_ready} + funciones de la API.
+\end{frame}
+
+% =====================================================
+\section{Demo}
+
+% =====================================================
+\begin{frame}{El banco de pruebas}
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+\textbf{Placa} & \textbf{Fabricante} & \textbf{Núcleo} & \textbf{Acelerómetro en la demo} \\
+\midrule
+Raspberry Pi Pico & Raspberry Pi & Cortex-M0+ & MPU6050 externo \\
+Black Pill F401 & STMicroelectronics & Cortex-M4F & MPU6050 externo \\
+ESP32-C3 SuperMini & Espressif & \alert{RISC-V} & MPU6050 externo \\
+ESP32-S3 DevKitC & Espressif & \alert{Xtensa LX7} & MPU6050 externo \\
+nRF5340 DK & Nordic & Cortex-M33 & MPU6050 externo \\
+FRDM-K64F & NXP & Cortex-M4F & FXOS8700 \alert{integrado} \emph{y} MPU6050 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.6em}
+\footnotesize Cinco fabricantes, tres arquitecturas: ARM, Xtensa y RISC-V.\\
+El workspace también compila para Pico 2, DOIT ESP32 DevKit V1, LPCXpresso55S69 y FRDM-MCXN236.
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{App 1: \texttt{blinky\_boton} --- el \texttt{main.c} (lo esencial)}
+\begin{lstlisting}[language=C]
+static const struct gpio_dt_spec led   = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+static const struct gpio_dt_spec boton = GPIO_DT_SPEC_GET(DT_ALIAS(sw0),  gpios);
+
+int main(void)
+{
+    gpio_pin_configure_dt(&led, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&boton, GPIO_INPUT);
+    gpio_pin_interrupt_configure_dt(&boton, GPIO_INT_EDGE_TO_ACTIVE);
+    gpio_init_callback(&boton_cb, boton_presionado, BIT(boton.pin));
+    gpio_add_callback_dt(&boton, &boton_cb);
+
+    while (1) {
+        gpio_pin_toggle_dt(&led);
+        k_msleep(periodos_ms[atomic_get(&indice)]);
+    }
+}
+\end{lstlisting}
+\centering\footnotesize Ni un número de pin. Ni un registro. Ni un \texttt{\#ifdef} de placa.
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{Lo que cambia por placa: el overlay}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{\footnotesize boards/rpi\_pico.overlay} \footnotesize(la Pico no tiene botón)
+\begin{lstlisting}[language=dts]
+/ {
+    botones {
+        compatible = "gpio-keys";
+        boton_ext: boton_ext {
+            gpios = <&gpio0 15
+              (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+    };
+    aliases {
+        sw0 = &boton_ext;
+    };
+};
+\end{lstlisting}
+\column{0.46\textwidth}
+\textbf{\footnotesize nRF5340 DK, FRDM-K64F, ESP32-C3\ldots}
+\begin{itemize}
+    \item Ya traen \texttt{led0} y \texttt{sw0} en su \texttt{.dts}
+    \item \alert{No necesitan overlay}
+\end{itemize}
+\vspace{0.5em}
+\textbf{\footnotesize Compilar y grabar}
+\begin{lstlisting}[language=sh]
+west build -p -b rpi_pico apps/blinky_boton
+west build -p -b esp32c3_supermini \
+    apps/blinky_boton
+west flash
+\end{lstlisting}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{App 2: \texttt{acelerometro} --- no sabe qué sensor tiene}
+\begin{lstlisting}[language=C]
+static const struct device *const sensor = DEVICE_DT_GET(DT_ALIAS(sensor0));
+
+static const struct magnitud magnitudes[] = {
+    {SENSOR_CHAN_ACCEL_XYZ, 3, "Aceleracion", "m/s2"},
+    {SENSOR_CHAN_GYRO_XYZ,  3, "Giro",        "rad/s"},
+    {SENSOR_CHAN_MAGN_XYZ,  3, "Campo magn.", "G"},
+    {SENSOR_CHAN_DIE_TEMP,  1, "Temp. chip",  "C"},
+};
+
+while (1) {
+    sensor_sample_fetch(sensor);
+    for (size_t i = 0; i < ARRAY_SIZE(magnitudes); i++) {
+        mostrar(&magnitudes[i]);  /* si el driver responde -ENOTSUP, se omite */
+    }
+    k_msleep(2000);
+}
+\end{lstlisting}
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{Placa + sensor: overlays que se combinan}
+\begin{columns}[T]
+\column{0.47\textwidth}
+\textbf{\footnotesize boards/frdm\_k64f.overlay} \footnotesize(se aplica solo)
+\begin{lstlisting}[language=dts]
+sensor_i2c: &i2c0 {      /* mi bus I2C */
+    status = "okay";
+};
+/ { aliases {             /* integrado */
+    sensor0 = &fxos8700; }; };
+\end{lstlisting}
+\textbf{\footnotesize mpu6050.overlay} \footnotesize(se pide al compilar)
+\begin{lstlisting}[language=dts]
+&sensor_i2c {
+    mpu6050: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg = <0x68>;
+    };
+};
+/ { aliases { sensor0 = &mpu6050; }; };
+\end{lstlisting}
+\column{0.5\textwidth}
+\begin{lstlisting}[language=sh]
+# acelerómetro integrado
+west build -p -b frdm_k64f apps/acelerometro
+
+# MPU6050 externo, misma placa
+west build -p -b frdm_k64f apps/acelerometro \
+  -- -DEXTRA_DTC_OVERLAY_FILE=mpu6050.overlay
+
+# MPU6050 externo, otra placa
+west build -p -b blackpill_f401cc \
+  apps/acelerometro \
+  -- -DEXTRA_DTC_OVERLAY_FILE=mpu6050.overlay
+\end{lstlisting}
+\footnotesize
+El overlay extra se aplica \textbf{después} del de la placa: \texttt{sensor0} pasa a ser el MPU6050.\\[0.3em]
+$N$ placas $+$ $M$ sensores = $N+M$ archivos, no $N\times M$.
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Mismo \texttt{main.c}, distinto sensor}
+\centering
+\small
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Sensor} & \textbf{Dónde} & \textbf{Acel.} & \textbf{Giro} & \textbf{Magn.} & \textbf{Temp.} \\
+\midrule
+MPU6050 & externo (cualquier placa) & \si & \si & \no & \si \\
+FXOS8700 & integrado en FRDM-K64F & \si & \no & \si & \no \\
+MMA8652FC & integrado en LPC55S69 & \si & \no & \no & \no \\
+\bottomrule
+\end{tabular}
+
+\vspace{1em}
+\begin{itemize}
+    \item La app pide las cuatro magnitudes; cada driver \textbf{responde lo que mide}
+    \item FXOS8700 y MMA8652FC: dos chips, \alert{un solo driver} (\texttt{nxp,fxos8700})
+    \item El modo (solo acelerómetro o acelerómetro + magnetómetro) lo fija el \textbf{Kconfig de cada placa}
+\end{itemize}
+\end{frame}
+
+% =====================================================
+\begin{frame}[standout]
+Demo en vivo
+
+\Large Mismo \texttt{main.c}, cinco fabricantes,\\tres arquitecturas, dos sensores
+\end{frame}
+
+% =====================================================
+\begin{frame}{Resultados: lo que cambia y lo que cuesta}
+\centering
+\small
+\begin{tabular}{lllrrr}
+\toprule
+\textbf{Placa} & \textbf{Núcleo} & \textbf{Sensor} & \textbf{Flash} & \textbf{RAM} & \textbf{Overlay} \\
+\midrule
+Raspberry Pi Pico & Cortex-M0+ & MPU6050 & 90,7 KiB & 17,0 KiB & 3 + 11 \\
+Black Pill F401 & Cortex-M4F & MPU6050 & 91,3 KiB & 18,0 KiB & 3 + 11 \\
+ESP32-C3 SuperMini & RISC-V & MPU6050 & 148,0 KiB & 112,3 KiB & 3 + 11 \\
+ESP32-S3 DevKitC & Xtensa LX7 & MPU6050 & 148,5 KiB & 110,8 KiB & 3 + 11 \\
+nRF5340 DK & Cortex-M33 & MPU6050 & 92,4 KiB & 17,6 KiB & 3 + 11 \\
+FRDM-K64F & Cortex-M4F & FXOS8700 integrado & 90,7 KiB & 17,9 KiB & 8 \\
+FRDM-K64F & Cortex-M4F & MPU6050 & 92,3 KiB & 17,9 KiB & 8 + 11 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.6em}
+\footnotesize \texttt{main.c} de \texttt{acelerometro}: 61 líneas, \alert{idéntico} en todas las placas.\\
+Overlay = placa + \texttt{mpu6050.overlay}. Memoria según el enlazador: kernel, drivers, logging y shell.
+\end{frame}
+
+% =====================================================
+\begin{frame}[fragile]{Explorar el hardware desde la shell}
+\begin{columns}[T]
+\column{0.52\textwidth}
+\begin{lstlisting}
+uart:~$ device list
+uart:~$ i2c scan i2c@40005400
+     0  1  2  3  4  5  6  7  8  9  a  b  ...
+60: -- -- -- -- -- -- -- -- 68 -- -- --
+uart:~$ sensor get mpu6050@68
+uart:~$ kernel thread list
+\end{lstlisting}
+\column{0.44\textwidth}
+\begin{itemize}
+    \item La shell está en el \texttt{prj.conf}: viene en la app, sin recompilar nada
+    \item Comandos para GPIO, I\textsuperscript{2}C, sensores, threads, memoria
+    \item Ideal para validar el cableado antes de escribir código
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\section{Herramientas y límites}
+
+% =====================================================
+\begin{frame}[fragile]{\texttt{west}: una sola herramienta para todo}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\begin{lstlisting}[language=sh]
+west init -l cie2026-zephyr   # workspace
+west update                   # Zephyr + HALs
+west build -b <placa> <app>
+west flash                    # grabar
+west debug                    # depurar (GDB)
+west build -t menuconfig      # Kconfig
+\end{lstlisting}
+\column{0.46\textwidth}
+\begin{itemize}
+    \item \texttt{west flash} elige el programador según la placa: \texttt{openocd}, \texttt{pyocd}, \texttt{esptool}, \texttt{dfu-util}, \texttt{nrfutil}, \texttt{linkserver}, J-Link\ldots
+    \item El \textbf{manifest} (\texttt{west.yml}) fija versiones $\Rightarrow$ builds reproducibles
+    \item Funciona igual en Linux, macOS y Windows
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Lo que Zephyr \emph{no} resuelve}
+\begin{itemize}
+    \item \textbf{Periféricos exclusivos} de un fabricante (PIO del RP2040, radio de Nordic, ULP del ESP32): portables solo en parte
+    \item \textbf{Soporte desparejo}: no todos los drivers implementan todo (DMA, bajo consumo, \emph{async})
+    \item \textbf{Costo en memoria}: más que bare-metal o un kernel solo (esta app: $\approx$90 KiB de flash en Cortex-M); en micros chicos no entra
+    \item \textbf{Curva de aprendizaje}: devicetree, Kconfig, CMake y west de entrada
+    \item \textbf{Temporización y consumo} siguen dependiendo del silicio: portar no es lo mismo que validar
+\end{itemize}
+\vspace{0.5em}
+\centering\small La portabilidad no es gratis: \alert{se paga una vez}, en la arquitectura, y no en cada cambio de placa.
+\end{frame}
+
+% =====================================================
+\begin{frame}{Para llevarse}
+\begin{enumerate}
+    \item El \textbf{devicetree} separa \emph{qué hardware hay} de \emph{qué hace la aplicación}
+    \item Las \textbf{APIs estandarizadas} hacen que el driver sea un detalle de implementación
+    \item Cambiar de placa o de sensor = \textbf{otro overlay}, no otro \texttt{main.c}
+    \item El código de la aplicación se vuelve \textbf{reutilizable, testeable y enseñable}
+\end{enumerate}
+\end{frame}
+
+% =====================================================
+\begin{frame}{Probalo vos}
+\begin{columns}[c]
+\column{0.6\textwidth}
+\begin{itemize}
+    \item Workspace completo: manifest, apps y overlays
+    \item Guía paso a paso para tu computadora (Linux, macOS o Windows)
+    \item Nota técnica con los resultados
+\end{itemize}
+\vspace{0.5em}
+\footnotesize\url{\repourl}
+
+\vspace{0.8em}
+\normalsize\textbf{Laboratorio de Sistemas Embebidos}\\
+\footnotesize UTN -- Facultad Regional Avellaneda
+\column{0.35\textwidth}
+\centering
+\qrcode[height=3.6cm]{\repourl}
+\end{columns}
+\end{frame}
+
+% =====================================================
+\begin{frame}[standout]
+¿Preguntas?
+\end{frame}
+
+\end{document}
