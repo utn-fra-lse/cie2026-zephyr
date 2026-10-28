@@ -1,0 +1,14 @@
+/*
+ * LPCXpresso55S69: FLEXCOMM4 en modo I2C (header Arduino/mikroBUS).
+ * Ya tiene un acelerómetro MMA8652FC en este bus.
+ */
+sensor_i2c: &flexcomm4 {
+	status = "okay";
+};
+
+/* Sensor integrado: es el sensor0 por defecto (sin overlay extra) */
+/ {
+	aliases {
+		sensor0 = &mma8652fc;
+	};
+};

@@ -1,0 +1,6 @@
+/*
+ * WeAct Black Pill (STM32F401CC): I2C1 -> SDA = PB9, SCL = PB8.
+ */
+sensor_i2c: &i2c1 {
+	status = "okay";
+};

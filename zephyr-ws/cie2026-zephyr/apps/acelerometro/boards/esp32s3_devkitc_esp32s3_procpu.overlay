@@ -1,0 +1,6 @@
+/*
+ * ESP32-S3 DevKitC: I2C0 -> SDA = GPIO1, SCL = GPIO2.
+ */
+sensor_i2c: &i2c0 {
+	status = "okay";
+};

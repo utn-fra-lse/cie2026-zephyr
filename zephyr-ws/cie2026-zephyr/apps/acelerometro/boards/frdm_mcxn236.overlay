@@ -1,0 +1,6 @@
+/*
+ * FRDM-MCXN236: LP_FLEXCOMM2 en modo I2C -> SDA = P4_0, SCL = P4_1 (header Arduino).
+ */
+sensor_i2c: &flexcomm2_lpi2c2 {
+	status = "okay";
+};

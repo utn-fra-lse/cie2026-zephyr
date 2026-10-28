@@ -1,0 +1,6 @@
+/*
+ * Raspberry Pi Pico (RP2040): I2C0 -> SDA = GP4 (pin 6), SCL = GP5 (pin 7).
+ */
+sensor_i2c: &i2c0 {
+	status = "okay";
+};

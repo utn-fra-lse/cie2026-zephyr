@@ -1,0 +1,7 @@
+/*
+ * ESP32-C3 SuperMini (RISC-V): I2C0 -> SDA = GPIO9, SCL = GPIO10.
+ * GPIO9 es también el botón BOOT: no presionarlo con el sensor conectado.
+ */
+sensor_i2c: &i2c0 {
+	status = "okay";
+};

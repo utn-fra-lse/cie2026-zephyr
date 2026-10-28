@@ -1,0 +1,23 @@
+/*
+ * MPU6050 (acelerómetro + giróscopo) por I2C.
+ *
+ * Se cuelga del bus "sensor_i2c", que define el overlay de cada placa, y
+ * pasa a ser "sensor0". Se aplica DESPUÉS del overlay de la placa, así que
+ * en las placas con acelerómetro integrado lo reemplaza.
+ *
+ *   west build -b <placa> apps/acelerometro -- -DEXTRA_DTC_OVERLAY_FILE=mpu6050.overlay
+ *
+ * Dirección 0x68 (AD0 a GND) o 0x69 (AD0 a VCC).
+ */
+&sensor_i2c {
+	mpu6050: mpu6050@68 {
+		compatible = "invensense,mpu6050";
+		reg = <0x68>;
+	};
+};
+
+/ {
+	aliases {
+		sensor0 = &mpu6050;
+	};
+};

@@ -1,0 +1,6 @@
+/*
+ * DOIT ESP32 DevKit V1: I2C0 -> SDA = GPIO21, SCL = GPIO22.
+ */
+sensor_i2c: &i2c0 {
+	status = "okay";
+};

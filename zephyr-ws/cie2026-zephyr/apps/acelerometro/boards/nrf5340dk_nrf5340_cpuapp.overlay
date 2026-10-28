@@ -1,0 +1,6 @@
+/*
+ * nRF5340 DK: I2C1 (header Arduino) -> SDA = P1.02, SCL = P1.03.
+ */
+sensor_i2c: &i2c1 {
+	status = "okay";
+};
