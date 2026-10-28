@@ -1,0 +1,19 @@
+# LaTeX
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+Tex
+# Workspace de west: solo se versiona cie2026-zephyr/
+zephyr-ws/*
+!zephyr-ws/cie2026-zephyr/
+.DS_Store
+.vscode
