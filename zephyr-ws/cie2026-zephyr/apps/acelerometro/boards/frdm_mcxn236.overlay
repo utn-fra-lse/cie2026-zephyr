@@ -1,5 +1,7 @@
 /*
  * FRDM-MCXN236: LP_FLEXCOMM2 en modo I2C -> SDA = P4_0, SCL = P4_1 (header Arduino).
+ * El acelerómetro FXLS8974 integrado ya es accel0 en el devicetree de la
+ * placa (desde Zephyr 4.5); este overlay solo nombra el bus para el MPU6050.
  */
 sensor_i2c: &flexcomm2_lpi2c2 {
 	status = "okay";

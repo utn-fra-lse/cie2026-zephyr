@@ -6,10 +6,12 @@
  * del chip.
  *
  * La aplicación no nombra ningún sensor ni ninguna placa. Solo conoce el
- * alias "sensor0" del devicetree y la API genérica de sensores. El mismo
- * código muestra aceleración + giro con un MPU6050 externo, aceleración +
- * campo magnético con el FXOS8700 de la FRDM-K64F, o solo aceleración
- * con el MMA8652FC de la LPCXpresso55S69.
+ * alias "accel0", el nombre estándar que usa Zephyr para el acelerómetro
+ * de una placa, y la API genérica de sensores. El mismo código muestra
+ * aceleración + giro con un MPU6050 externo, aceleración + campo magnético
+ * con el FXOS8700 de la FRDM-K64F, aceleración + temperatura con el
+ * FXLS8974 de la FRDM-MCXN236, o solo aceleración con el MMA8652FC de la
+ * LPCXpresso55S69.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -22,12 +24,12 @@
 
 LOG_MODULE_REGISTER(acelerometro, LOG_LEVEL_INF);
 
-#if !DT_NODE_EXISTS(DT_ALIAS(sensor0))
-#error "Falta el alias 'sensor0': esta placa no tiene sensor integrado. \
+#if !DT_NODE_EXISTS(DT_ALIAS(accel0))
+#error "Falta el alias 'accel0': esta placa no tiene acelerometro integrado. \
 Compilá con -DEXTRA_DTC_OVERLAY_FILE=mpu6050.overlay"
 #endif
 
-static const struct device *const sensor = DEVICE_DT_GET(DT_ALIAS(sensor0));
+static const struct device *const sensor = DEVICE_DT_GET(DT_ALIAS(accel0));
 
 /* LED de "latido": opcional, si la placa no define led0 se omite. */
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
@@ -46,6 +48,7 @@ static const struct magnitud magnitudes[] = {
 	{SENSOR_CHAN_GYRO_XYZ, 3, "Giro", "rad/s"},
 	{SENSOR_CHAN_MAGN_XYZ, 3, "Campo magn.", "G"},
 	{SENSOR_CHAN_DIE_TEMP, 1, "Temp. chip", "C"},
+	{SENSOR_CHAN_AMBIENT_TEMP, 1, "Temperatura", "C"},
 };
 
 static void mostrar(const struct magnitud *m)

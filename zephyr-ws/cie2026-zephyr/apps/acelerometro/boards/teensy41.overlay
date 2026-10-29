@@ -1,0 +1,6 @@
+/*
+ * Teensy 4.1: LPI2C1 -> SDA = pin 18, SCL = pin 19.
+ */
+sensor_i2c: &lpi2c1 {
+	status = "okay";
+};

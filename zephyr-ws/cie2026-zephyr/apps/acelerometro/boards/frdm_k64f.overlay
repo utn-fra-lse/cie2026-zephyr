@@ -1,14 +1,8 @@
 /*
  * FRDM-K64F: I2C0 (header Arduino) -> SDA = PTE25, SCL = PTE24.
- * Ya tiene un acelerómetro/magnetómetro FXOS8700 en este bus.
+ * El acelerómetro/magnetómetro FXOS8700 integrado ya es accel0 en el
+ * devicetree de la placa; este overlay solo nombra el bus para el MPU6050.
  */
 sensor_i2c: &i2c0 {
 	status = "okay";
-};
-
-/* Sensor integrado: es el sensor0 por defecto (sin overlay extra) */
-/ {
-	aliases {
-		sensor0 = &fxos8700;
-	};
 };
