@@ -19,7 +19,7 @@ manifest:
   projects:
     - name: zephyr
       remote: zephyrproject-rtos
-      revision: v4.4.2
+      revision: v4.5.0
       import:
         name-allowlist:
           - cmsis_6        # Cortex-M (CMSIS 6)
@@ -29,4 +29,4 @@ manifest:
           - hal_stm32      # STMicroelectronics (Black Pill F401)
           - hal_espressif  # ESP32, ESP32-C3, ESP32-S3
           - hal_nordic     # nRF5340
-          - hal_nxp        # LPC55S69, MCXN236, K64F
+          - hal_nxp        # LPC55S69, MCXN236, K64F, i.MX RT1062 (Teensy 4.1)

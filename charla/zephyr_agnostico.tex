@@ -72,7 +72,7 @@
     \item Zephyr en cinco minutos
     \item \textbf{Devicetree}: describir el hardware en vez de programarlo
     \item \textbf{Modelo de drivers}: una API, muchas implementaciones
-    \item \alert{Demo}: la misma aplicación en placas de cinco fabricantes
+    \item \alert{Demo}: las mismas aplicaciones en placas de distintos fabricantes y arquitecturas
     \item Herramientas, límites y cómo empezar
 \end{enumerate}
 \end{frame}
@@ -155,17 +155,17 @@ Cuatro APIs, cuatro sistemas de build, cuatro formas de configurar relojes y pin
 \renewcommand{\arraystretch}{1.3}
 \begin{tabular}{rl}
 \toprule
-\multicolumn{2}{c}{\textbf{Zephyr v4.4.2}} \\
+\multicolumn{2}{c}{\textbf{Zephyr v4.5.0}} \\
 \midrule
-\alert{\Large +1000} & placas \\
-\alert{\Large 160} & fabricantes de placas \\
-\alert{\Large 11} & arquitecturas \\
-\alert{\Large +200} & drivers de sensores \\
+\alert{\Large +1100} & placas \\
+\alert{\Large 185} & fabricantes de placas \\
+\alert{\Large 13} & arquitecturas \\
+\alert{\Large +240} & drivers de sensores \\
 \bottomrule
 \end{tabular}
 
 \vspace{0.3em}
-{\tiny Contado sobre el árbol de v4.4.2}
+{\tiny Contado sobre el árbol de v4.5.0}
 \end{columns}
 \end{frame}
 
@@ -177,7 +177,7 @@ Cuatro APIs, cuatro sistemas de build, cuatro formas de configurar relojes y pin
     layer/.style={draw, text width=10cm, minimum height=0.9cm, align=center, font=\small},
     side/.style={draw, rounded corners, text width=3.2cm, align=center, font=\small, fill=yellow!20},
 ]
-\node[layer, fill=gray!25] (hw) {Hardware\\\footnotesize RP2040 · STM32 · ESP32-C3 · ESP32-S3 · nRF5340 · K64F · \ldots};
+\node[layer, fill=gray!25] (hw) {Hardware\\\footnotesize RP2040 · STM32 · ESP32-C3 · nRF5340 · K64F · i.MX RT · \ldots};
 \node[layer, fill=orange!20, above=0cm of hw] (hal) {HALs de los fabricantes \footnotesize(módulos, ocultos)};
 \node[layer, fill=blue!20, above=0cm of hal] (drv) {Drivers \footnotesize(una implementación por periférico)};
 \node[layer, fill=blue!10, above=0cm of drv] (api) {\textbf{APIs estándar}: GPIO, I\textsuperscript{2}C, SPI, UART, ADC, PWM, sensor\ldots};
@@ -238,7 +238,7 @@ Red, BLE, USB, FS & Bibliotecas externas & Integradas \\
 \begin{lstlisting}[language=dts]
 / {
     aliases {
-        sensor0 = &mpu6050;
+        accel0 = &mpu6050;
     };
 };
 
@@ -301,7 +301,7 @@ Red, BLE, USB, FS & Bibliotecas externas & Integradas \\
     \item Archivo YAML por cada \texttt{compatible}
     \item Define qué propiedades existen, su tipo y si son obligatorias
     \item El build \textbf{valida} el árbol contra el binding
-    \item Zephyr v4.4.2 trae \alert{más de 3700} bindings
+    \item Zephyr v4.5.0 trae \alert{más de 4400} bindings
 \end{itemize}
 \column{0.46\textwidth}
 \centering
@@ -429,7 +429,7 @@ struct device {
 \column{0.56\textwidth}
 \begin{lstlisting}[language=C]
 const struct device *s =
-        DEVICE_DT_GET(DT_ALIAS(sensor0));
+        DEVICE_DT_GET(DT_ALIAS(accel0));
 struct sensor_value v[3];
 
 sensor_sample_fetch(s);  /* medir */
@@ -444,7 +444,7 @@ sensor_channel_get(s,
 \begin{itemize}
     \item Canales con \textbf{unidades del SI}: m/s\textsuperscript{2}, rad/s, gauss, °C
     \item \texttt{sensor\_value}: entero + millonésimas, sin \texttt{float} obligatorio
-    \item Igual para MPU6050, FXOS8700, MMA8652FC y otros +200
+    \item Igual para MPU6050, FXOS8700, FXLS8974, MMA8652FC y otros +240
     \item API asíncrona \texttt{sensor\_read()} + decodificadores para alto rendimiento
 \end{itemize}
 \end{columns}
@@ -474,25 +474,26 @@ Mismo patrón en todas: \texttt{DEVICE\_DT\_GET} + \texttt{device\_is\_ready} + 
 \section{Demo}
 
 % =====================================================
-\begin{frame}{El banco de pruebas}
+\begin{frame}{El banco de pruebas: solo hardware integrado}
 \centering
-\small
-\begin{tabular}{llll}
+\footnotesize
+\setlength{\tabcolsep}{4pt}\begin{tabular}{lllcclc}
 \toprule
-\textbf{Placa} & \textbf{Fabricante} & \textbf{Núcleo} & \textbf{Acelerómetro en la demo} \\
+\textbf{Placa} & \textbf{Fabricante} & \textbf{Núcleo} & \textbf{LED} & \textbf{Botón} & \textbf{Acelerómetro} & \textbf{Temp.} \\
 \midrule
-Raspberry Pi Pico & Raspberry Pi & Cortex-M0+ & MPU6050 externo \\
-Black Pill F401 & STMicroelectronics & Cortex-M4F & MPU6050 externo \\
-ESP32-C3 SuperMini & Espressif & \alert{RISC-V} & MPU6050 externo \\
-ESP32-S3 DevKitC & Espressif & \alert{Xtensa LX7} & MPU6050 externo \\
-nRF5340 DK & Nordic & Cortex-M33 & MPU6050 externo \\
-FRDM-K64F & NXP & Cortex-M4F & FXOS8700 \alert{integrado} \emph{y} MPU6050 \\
+nRF5340 DK & Nordic & Cortex-M33 & \si & \si & MPU6050 (ext.) & \no \\
+FRDM-K64F & NXP & Cortex-M4F & \si & \si & FXOS8700 & \si \\
+LPCXpresso55S69 & NXP & Cortex-M33 & \si & \si & MMA8652FC & \no \\
+FRDM-MCXN236 & NXP & Cortex-M33 & \si & \si & FXLS8974 & \si \\
+ESP32-C3 SuperMini & Espressif & \alert{RISC-V} & \si & \si & \no & \si \\
+DOIT ESP32 & Espressif & \alert{Xtensa LX6} & \si & \si & \no & \no \\
+Teensy 4.1 & PJRC (NXP) & Cortex-M7 & \si & \no & \no & \si \\
 \bottomrule
 \end{tabular}
 
 \vspace{0.6em}
-\footnotesize Cinco fabricantes, tres arquitecturas: ARM, Xtensa y RISC-V.\\
-El workspace también compila para Pico 2, DOIT ESP32 DevKit V1, LPCXpresso55S69 y FRDM-MCXN236.
+\footnotesize Cada demo usa lo que la placa ya trae. Única excepción: el MPU6050 del nRF5340 DK.\\
+También compilan, como referencia de memoria: Pico, Pico 2, Black Pill F401 y ESP32-S3.
 \end{frame}
 
 % =====================================================
@@ -515,41 +516,36 @@ int main(void)
     }
 }
 \end{lstlisting}
-\centering\footnotesize Ni un número de pin. Ni un registro. Ni un \texttt{\#ifdef} de placa.
+\centering\footnotesize Ni un número de pin. Ni un registro. Ni un \texttt{\#ifdef} de placa (solo ``¿hay botón?'').
 \end{frame}
 
 % =====================================================
-\begin{frame}[fragile]{Lo que cambia por placa: el overlay}
+\begin{frame}[fragile]{Lo que cambia por placa: nada}
 \begin{columns}[T]
 \column{0.5\textwidth}
-\textbf{\footnotesize boards/rpi\_pico.overlay} \footnotesize(la Pico no tiene botón)
-\begin{lstlisting}[language=dts]
-/ {
-    botones {
-        compatible = "gpio-keys";
-        boton_ext: boton_ext {
-            gpios = <&gpio0 15
-              (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-        };
-    };
-    aliases {
-        sw0 = &boton_ext;
-    };
-};
+\textbf{\footnotesize El botón es opcional}
+\begin{lstlisting}[language=C]
+#if DT_NODE_EXISTS(DT_ALIAS(sw0))
+/* la placa tiene botón: se usa */
+static const struct gpio_dt_spec boton =
+    GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
+#else
+/* sin botón: periodo fijo */
+#endif
 \end{lstlisting}
+\footnotesize La Teensy 4.1 no tiene botón: la app lo sabe \textbf{al compilar}.
 \column{0.46\textwidth}
-\textbf{\footnotesize nRF5340 DK, FRDM-K64F, ESP32-C3\ldots}
+\textbf{\footnotesize Ningún overlay para blinky}
 \begin{itemize}
-    \item Ya traen \texttt{led0} y \texttt{sw0} en su \texttt{.dts}
-    \item \alert{No necesitan overlay}
+    \item Todas las placas de la demo ya definen \texttt{led0} (y casi todas \texttt{sw0}) en su \texttt{.dts}
 \end{itemize}
-\vspace{0.5em}
-\textbf{\footnotesize Compilar y grabar}
+\vspace{0.3em}
 \begin{lstlisting}[language=sh]
-west build -p -b rpi_pico apps/blinky_boton
+west build -p -b nrf5340dk/nrf5340/cpuapp \
+    apps/blinky_boton
 west build -p -b esp32c3_supermini \
     apps/blinky_boton
-west flash
+west build -p -b teensy41 apps/blinky_boton
 \end{lstlisting}
 \end{columns}
 \end{frame}
@@ -557,13 +553,15 @@ west flash
 % =====================================================
 \begin{frame}[fragile]{App 2: \texttt{acelerometro} --- no sabe qué sensor tiene}
 \begin{lstlisting}[language=C]
-static const struct device *const sensor = DEVICE_DT_GET(DT_ALIAS(sensor0));
+/* "accel0": el nombre estándar de Zephyr para el acelerómetro de la placa */
+static const struct device *const sensor = DEVICE_DT_GET(DT_ALIAS(accel0));
 
 static const struct magnitud magnitudes[] = {
-    {SENSOR_CHAN_ACCEL_XYZ, 3, "Aceleracion", "m/s2"},
-    {SENSOR_CHAN_GYRO_XYZ,  3, "Giro",        "rad/s"},
-    {SENSOR_CHAN_MAGN_XYZ,  3, "Campo magn.", "G"},
-    {SENSOR_CHAN_DIE_TEMP,  1, "Temp. chip",  "C"},
+    {SENSOR_CHAN_ACCEL_XYZ,    3, "Aceleracion", "m/s2"},
+    {SENSOR_CHAN_GYRO_XYZ,     3, "Giro",        "rad/s"},
+    {SENSOR_CHAN_MAGN_XYZ,     3, "Campo magn.", "G"},
+    {SENSOR_CHAN_DIE_TEMP,     1, "Temp. chip",  "C"},
+    {SENSOR_CHAN_AMBIENT_TEMP, 1, "Temperatura", "C"},
 };
 
 while (1) {
@@ -580,13 +578,15 @@ while (1) {
 \begin{frame}[fragile]{Placa + sensor: overlays que se combinan}
 \begin{columns}[T]
 \column{0.47\textwidth}
+\textbf{\footnotesize frdm\_k64f.dts} \footnotesize(de Zephyr, no lo tocamos)
+\begin{lstlisting}[language=dts]
+aliases { accel0 = &fxos8700; };
+\end{lstlisting}
 \textbf{\footnotesize boards/frdm\_k64f.overlay} \footnotesize(se aplica solo)
 \begin{lstlisting}[language=dts]
-sensor_i2c: &i2c0 {      /* mi bus I2C */
+sensor_i2c: &i2c0 {   /* mi bus I2C */
     status = "okay";
 };
-/ { aliases {             /* integrado */
-    sensor0 = &fxos8700; }; };
 \end{lstlisting}
 \textbf{\footnotesize mpu6050.overlay} \footnotesize(se pide al compilar)
 \begin{lstlisting}[language=dts]
@@ -596,24 +596,21 @@ sensor_i2c: &i2c0 {      /* mi bus I2C */
         reg = <0x68>;
     };
 };
-/ { aliases { sensor0 = &mpu6050; }; };
+/ { aliases { accel0 = &mpu6050; }; };
 \end{lstlisting}
 \column{0.5\textwidth}
 \begin{lstlisting}[language=sh]
-# acelerómetro integrado
+# acelerómetro integrado: sin overlay extra
 west build -p -b frdm_k64f apps/acelerometro
+west build -p -b frdm_mcxn236 apps/acelerometro
 
-# MPU6050 externo, misma placa
-west build -p -b frdm_k64f apps/acelerometro \
-  -- -DEXTRA_DTC_OVERLAY_FILE=mpu6050.overlay
-
-# MPU6050 externo, otra placa
-west build -p -b blackpill_f401cc \
+# MPU6050 externo (el nRF5340 DK no trae)
+west build -p -b nrf5340dk/nrf5340/cpuapp \
   apps/acelerometro \
   -- -DEXTRA_DTC_OVERLAY_FILE=mpu6050.overlay
 \end{lstlisting}
 \footnotesize
-El overlay extra se aplica \textbf{después} del de la placa: \texttt{sensor0} pasa a ser el MPU6050.\\[0.3em]
+El overlay extra se aplica \textbf{después} del de la placa: si la placa tenía sensor, el MPU6050 lo reemplaza.\\[0.3em]
 $N$ placas $+$ $M$ sensores = $N+M$ archivos, no $N\times M$.
 \end{columns}
 \end{frame}
@@ -626,48 +623,94 @@ $N$ placas $+$ $M$ sensores = $N+M$ archivos, no $N\times M$.
 \toprule
 \textbf{Sensor} & \textbf{Dónde} & \textbf{Acel.} & \textbf{Giro} & \textbf{Magn.} & \textbf{Temp.} \\
 \midrule
-MPU6050 & externo (cualquier placa) & \si & \si & \no & \si \\
+MPU6050 & externo (nRF5340 DK) & \si & \si & \no & \si \\
 FXOS8700 & integrado en FRDM-K64F & \si & \no & \si & \no \\
+FXLS8974 & integrado en FRDM-MCXN236 & \si & \no & \no & \si \\
 MMA8652FC & integrado en LPC55S69 & \si & \no & \no & \no \\
 \bottomrule
 \end{tabular}
 
 \vspace{1em}
 \begin{itemize}
-    \item La app pide las cuatro magnitudes; cada driver \textbf{responde lo que mide}
+    \item La app pide todas las magnitudes; cada driver \textbf{responde lo que mide}
+    \item \texttt{accel0} ya lo definen las placas: la app no necesita overlay
     \item FXOS8700 y MMA8652FC: dos chips, \alert{un solo driver} (\texttt{nxp,fxos8700})
     \item El modo (solo acelerómetro o acelerómetro + magnetómetro) lo fija el \textbf{Kconfig de cada placa}
 \end{itemize}
 \end{frame}
 
 % =====================================================
-\begin{frame}[standout]
-Demo en vivo
+\begin{frame}[fragile]{App 3: \texttt{temperatura} --- el sensor interno del chip}
+\begin{lstlisting}[language=C]
+/* "die-temp0": el nombre estándar de Zephyr para la temperatura del chip */
+static const struct device *const sensor = DEVICE_DT_GET(DT_ALIAS(die_temp0));
 
-\Large Mismo \texttt{main.c}, cinco fabricantes,\\tres arquitecturas, dos sensores
+while (1) {
+    sensor_sample_fetch_chan(sensor, SENSOR_CHAN_DIE_TEMP);
+    sensor_channel_get(sensor, SENSOR_CHAN_DIE_TEMP, &temp);
+    LOG_INF("Temperatura del chip: %.1f C", sensor_value_to_double(&temp));
+    k_msleep(2000);
+}
+\end{lstlisting}
+\vspace{0.3em}
+\centering\small Casi todos los microcontroladores tienen uno. \alert{Cada fabricante lo mide distinto.}
 \end{frame}
 
 % =====================================================
-\begin{frame}{Resultados: lo que cambia y lo que cuesta}
+\begin{frame}{Mismo alias, distinto hardware}
 \centering
-\small
-\begin{tabular}{lllrrr}
+\footnotesize
+\begin{tabular}{lll}
 \toprule
-\textbf{Placa} & \textbf{Núcleo} & \textbf{Sensor} & \textbf{Flash} & \textbf{RAM} & \textbf{Overlay} \\
+\textbf{SoC} & \textbf{Cómo mide} & \textbf{Qué hace el overlay} \\
 \midrule
-Raspberry Pi Pico & Cortex-M0+ & MPU6050 & 90,7 KiB & 17,0 KiB & 3 + 11 \\
-Black Pill F401 & Cortex-M4F & MPU6050 & 91,3 KiB & 18,0 KiB & 3 + 11 \\
-ESP32-C3 SuperMini & RISC-V & MPU6050 & 148,0 KiB & 112,3 KiB & 3 + 11 \\
-ESP32-S3 DevKitC & Xtensa LX7 & MPU6050 & 148,5 KiB & 110,8 KiB & 3 + 11 \\
-nRF5340 DK & Cortex-M33 & MPU6050 & 92,4 KiB & 17,6 KiB & 3 + 11 \\
-FRDM-K64F & Cortex-M4F & FXOS8700 integrado & 90,7 KiB & 17,9 KiB & 8 \\
-FRDM-K64F & Cortex-M4F & MPU6050 & 92,3 KiB & 17,9 KiB & 8 + 11 \\
+ESP32-C3, ESP32-S3 & periférico dedicado & habilitar el nodo \\
+i.MX RT1062 (Teensy 4.1) & monitor dedicado (TEMPMON) & habilitar el nodo \\
+RP2040 (Pico) & canal 4 del ADC & habilitar el nodo \\
+RP2350 (Pico 2) & canal 4 del ADC & nada: ya viene habilitado \\
+STM32F401 (Black Pill) & ADC1 canal 16 + calibración & habilitar + alias \\
+Kinetis K64F & ADC1 canales 26 y 27 & solo el alias \\
+MCXN236 & LPADC0 canales 26A/26B & \alert{configurar el canal} \\
 \bottomrule
 \end{tabular}
 
-\vspace{0.6em}
-\footnotesize \texttt{main.c} de \texttt{acelerometro}: 61 líneas, \alert{idéntico} en todas las placas.\\
-Overlay = placa + \texttt{mpu6050.overlay}. Memoria según el enlazador: kernel, drivers, logging y shell.
+\vspace{0.8em}
+\footnotesize La aplicación siempre pide lo mismo: \texttt{die-temp0} y \texttt{SENSOR\_CHAN\_DIE\_TEMP}.\\
+El nRF5340 tiene sensor, pero en el núcleo de red: desde el de aplicación no está disponible.
+\end{frame}
+
+% =====================================================
+\begin{frame}[standout]
+Demo en vivo
+
+\Large Tres apps, tres arquitecturas,\\ni un \texttt{main.c} modificado
+\end{frame}
+
+% =====================================================
+\begin{frame}{Resultados: lo que cuesta cada app}
+\centering
+\scriptsize
+\begin{tabular}{llccc}
+\toprule
+\textbf{Placa} & \textbf{Núcleo} & \textbf{blinky\_boton} & \textbf{acelerometro} & \textbf{temperatura} \\
+\midrule
+Raspberry Pi Pico & Cortex-M0+ & 25,8 / 6,0 & 92,5 / 17,2 & 36,0 / 6,2 \\
+Raspberry Pi Pico 2 & Cortex-M33 & 26,6 / 6,1 & 90,0 / 17,6 & 35,3 / 6,2 \\
+Black Pill F401 & Cortex-M4F & 27,6 / 6,6 & 94,3 / 18,3 & 41,9 / 7,0 \\
+DOIT ESP32 & Xtensa LX6 & 144,9 / 52,2 & 188,9 / 66,1 & -- \\
+ESP32-C3 SuperMini & RISC-V & 131,8 / 91,1 & 211,9 / 116,3 & 134,1 / 93,6 \\
+ESP32-S3 DevKitC & Xtensa LX7 & -- & 148,3 / 121,9 & 135,3 / 98,4 \\
+nRF5340 DK & Cortex-M33 & 31,9 / 6,6 & 94,2 / 17,8 & -- \\
+LPCXpresso55S69 & Cortex-M33 & 30,1 / 6,4 & 94,5 / 17,6 & -- \\
+FRDM-MCXN236 & Cortex-M33 & 38,1 / 6,5 & 100,8 / 18,0 & 54,4 / 7,2 \\
+FRDM-K64F & Cortex-M4F & 27,5 / 6,4 & 94,6 / 18,2 & 41,4 / 6,9 \\
+Teensy 4.1 & Cortex-M7 & 42,1 / 6,5 & 104,8 / 15,3 & 51,0 / 6,5 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\footnotesize KiB de flash / RAM según el enlazador (Zephyr 4.5.0). 32 compilaciones, \alert{ningún \texttt{main.c} modificado}.\\
+\texttt{acelerometro} incluye la shell; ``--'': la placa no tiene ese hardware.
 \end{frame}
 
 % =====================================================
@@ -708,7 +751,7 @@ west build -t menuconfig      # Kconfig
 \end{lstlisting}
 \column{0.46\textwidth}
 \begin{itemize}
-    \item \texttt{west flash} elige el programador según la placa: \texttt{openocd}, \texttt{pyocd}, \texttt{esptool}, \texttt{dfu-util}, \texttt{nrfutil}, \texttt{linkserver}, J-Link\ldots
+    \item \texttt{west flash} elige el programador según la placa: \texttt{pyocd}, \texttt{esptool}, \texttt{nrfutil}, \texttt{linkserver}, \texttt{teensy}, J-Link\ldots
     \item El \textbf{manifest} (\texttt{west.yml}) fija versiones $\Rightarrow$ builds reproducibles
     \item Funciona igual en Linux, macOS y Windows
 \end{itemize}
@@ -720,7 +763,8 @@ west build -t menuconfig      # Kconfig
 \begin{itemize}
     \item \textbf{Periféricos exclusivos} de un fabricante (PIO del RP2040, radio de Nordic, ULP del ESP32): portables solo en parte
     \item \textbf{Soporte desparejo}: no todos los drivers implementan todo (DMA, bajo consumo, \emph{async})
-    \item \textbf{Costo en memoria}: más que bare-metal o un kernel solo (esta app: $\approx$90 KiB de flash en Cortex-M); en micros chicos no entra
+    \item \textbf{Costo en memoria}: más que bare-metal o un kernel solo (blinky $\approx$30 KiB; con logging y shell 90--105 KiB en Cortex-M)
+    \item \textbf{Cobertura desigual}: el sensor de temperatura no está disponible en el nRF5340 (núcleo de aplicación), el ESP32 ni el LPC55S69
     \item \textbf{Curva de aprendizaje}: devicetree, Kconfig, CMake y west de entrada
     \item \textbf{Temporización y consumo} siguen dependiendo del silicio: portar no es lo mismo que validar
 \end{itemize}
