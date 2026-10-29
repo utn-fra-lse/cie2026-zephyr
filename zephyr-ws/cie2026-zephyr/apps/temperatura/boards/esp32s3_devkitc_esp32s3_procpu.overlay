@@ -1,0 +1,7 @@
+/*
+ * ESP32-S3 DevKitC: sensor de temperatura dedicado del ESP32-S3. El SoC ya
+ * define el alias die-temp0.
+ */
+&coretemp {
+	status = "okay";
+};

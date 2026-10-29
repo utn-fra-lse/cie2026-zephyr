@@ -1,0 +1,29 @@
+/*
+ * FRDM-MCXN236: el sensor interno se lee por el LPADC0, en modo diferencial
+ * entre los canales 26A y 26B.
+ * La placa ya define el alias die-temp0; hay que configurar el canal del
+ * ADC y habilitar el sensor.
+ */
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/adc/mcux-lpadc.h>
+
+&lpadc0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_EXTERNAL0";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 131)>;
+		zephyr,differential;
+		zephyr,input-positive = <MCUX_LPADC_CH26A>;
+		zephyr,input-negative = <MCUX_LPADC_CH26B>;
+	};
+};
+
+&temp0 {
+	status = "okay";
+	io-channels = <&lpadc0 0>;
+};

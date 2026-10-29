@@ -1,0 +1,13 @@
+/*
+ * Black Pill F401: el sensor interno del STM32 se lee por el canal 16 del
+ * ADC1, con la calibración de fábrica guardada en el chip.
+ */
+&die_temp {
+	status = "okay";
+};
+
+/ {
+	aliases {
+		die-temp0 = &die_temp;
+	};
+};

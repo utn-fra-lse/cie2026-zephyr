@@ -1,0 +1,7 @@
+/*
+ * Raspberry Pi Pico: el RP2040 trae un sensor de temperatura en el canal 4
+ * del ADC. El SoC ya define el alias die-temp0; solo hay que habilitarlo.
+ */
+&die_temp {
+	status = "okay";
+};

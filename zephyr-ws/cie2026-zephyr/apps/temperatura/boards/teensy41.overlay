@@ -1,0 +1,7 @@
+/*
+ * Teensy 4.1: el i.MX RT1062 tiene un monitor de temperatura dedicado
+ * (TEMPMON). El SoC ya define el alias die-temp0.
+ */
+&tempmon {
+	status = "okay";
+};

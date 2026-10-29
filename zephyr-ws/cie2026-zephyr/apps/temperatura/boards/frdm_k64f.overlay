@@ -1,0 +1,9 @@
+/*
+ * FRDM-K64F: la placa ya habilita el sensor interno (temp1, leído por el
+ * ADC1). Solo falta el alias genérico.
+ */
+/ {
+	aliases {
+		die-temp0 = &temp1;
+	};
+};

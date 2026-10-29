@@ -1,0 +1,7 @@
+/*
+ * ESP32-C3 SuperMini: sensor de temperatura dedicado del ESP32-C3. El SoC
+ * ya define el alias die-temp0.
+ */
+&coretemp {
+	status = "okay";
+};
